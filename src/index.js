@@ -72,6 +72,11 @@ export type OptionsData = {
    * A boolean to optionally enable GraphiQL mode.
    */
   graphiql?: ?boolean,
+
+  /**
+   * Specify to enable split mode
+   */
+  backendServer?: ?String,
 };
 
 type Middleware = (request: Request, response: Response) => void;
@@ -99,6 +104,7 @@ export default function graphqlHTTP(options: Options): Middleware {
     let variables;
     let operationName;
     let validationRules;
+    let backendServer;
 
     // Promises are used as a mechanism for capturing any thrown errors during
     // the asyncronous process below.
@@ -122,13 +128,13 @@ export default function graphqlHTTP(options: Options): Middleware {
         );
       }
 
-      // Collect information from the options data object.
       schema = optionsData.schema;
       context = optionsData.context;
       rootValue = optionsData.rootValue;
       pretty = optionsData.pretty;
       graphiql = optionsData.graphiql;
       formatErrorFn = optionsData.formatError;
+      backendServer = optionsData.backendServer;
 
       validationRules = specifiedRules;
       if (optionsData.validationRules) {
@@ -232,7 +238,7 @@ export default function graphqlHTTP(options: Options): Middleware {
       if (showGraphiQL) {
         response
           .set('Content-Type', 'text/html')
-          .send(renderGraphiQL({ query, variables, operationName, result }));
+          .send(renderGraphiQL({ query, variables, operationName, result, backendServer }));
       } else {
         // Otherwise, present JSON directly.
         response

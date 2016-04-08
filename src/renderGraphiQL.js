@@ -12,11 +12,12 @@ type GraphiQLData = {
   query: ?string,
   variables: ?Object,
   operationName: ?string,
-  result?: Object
+  result?: Object,
+  backendServer: ?string
 };
 
 // Current latest version of GraphiQL.
-const GRAPHIQL_VERSION = '0.7.0';
+const GRAPHIQL_VERSION = '0.6.6';
 
 // Ensures string values are save to be used within a <script> tag.
 function safeSerialize(data) {
@@ -37,6 +38,9 @@ export function renderGraphiQL(data: GraphiQLData): string {
   const resultString =
     data.result ? JSON.stringify(data.result, null, 2) : null;
   const operationName = data.operationName;
+
+  const splitQuery = typeof (data.backendServer) === 'string';
+  const backendServerUrl = data.backendServer;
 
   /* eslint-disable max-len */
   return `<!--
@@ -60,8 +64,8 @@ add "&raw" to the end of the URL within a browser.
   </style>
   <link href="//cdn.jsdelivr.net/graphiql/${GRAPHIQL_VERSION}/graphiql.css" rel="stylesheet" />
   <script src="//cdn.jsdelivr.net/fetch/0.9.0/fetch.min.js"></script>
-  <script src="//cdn.jsdelivr.net/react/15.0.0/react.min.js"></script>
-  <script src="//cdn.jsdelivr.net/react/15.0.0/react-dom.min.js"></script>
+  <script src="//cdn.jsdelivr.net/react/0.14.3/react.min.js"></script>
+  <script src="//cdn.jsdelivr.net/react/0.14.3/react-dom.min.js"></script>
   <script src="//cdn.jsdelivr.net/graphiql/${GRAPHIQL_VERSION}/graphiql.min.js"></script>
 </head>
 <body>
@@ -101,14 +105,22 @@ add "&raw" to the end of the URL within a browser.
 
     // Defines a GraphQL fetcher using the fetch API.
     function graphQLFetcher(graphQLParams) {
-      return fetch(fetchURL, {
+      let modifiedFetchURL, fetchBody;
+      if (${splitQuery}) {
+        let sendToFrontEnd = graphQLParams.query && graphQLParams.query.indexOf('IntrospectionQuery') > -1;
+        modifiedFetchURL = sendToFrontEnd ? fetchURL : '${backendServerUrl}';
+        fetchBody = sendToFrontEnd ? JSON.stringify(graphQLParams) : JSON.stringify(graphQLParams.query);
+      } else {
+        modifiedFetchURL = fetchURL;
+        fetchBody = JSON.stringify(graphQLParams);
+      }
+      return fetch(modifiedFetchURL, {
         method: 'post',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(graphQLParams),
-        credentials: 'include',
+        body: fetchBody
       }).then(function (response) {
         return response.text();
       }).then(function (responseBody) {
