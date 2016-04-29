@@ -11,6 +11,9 @@
 /**
  * Used to configure the graphQLHTTP middleware by providing a schema
  * and other configuration options.
+ *
+ * Options can be provided as an Object, a Promise for an Object, or a Function
+ * that returns an Object or a Promise for an Object.
  */
 'use strict';
 
@@ -57,23 +60,34 @@ function graphqlHTTP(options) {
     var validationRules = undefined;
     var backendServer = undefined;
 
-    // Use promises as a mechanism for capturing any thrown errors during the
-    // asyncronous process.
-    new Promise(function (resolve, reject) {
+    // Promises are used as a mechanism for capturing any thrown errors during
+    // the asyncronous process below.
 
-      // Get GraphQL options given this request.
-      var optionsObj = getOptions(options, request);
-      schema = optionsObj.schema;
-      context = optionsObj.context;
-      rootValue = optionsObj.rootValue;
-      pretty = optionsObj.pretty;
-      graphiql = optionsObj.graphiql;
-      formatErrorFn = optionsObj.formatError;
-      backendServer = optionsObj.backendServer;
+    // Resolve the Options to get OptionsData.
+    new Promise(function (resolve) {
+      resolve(typeof options === 'function' ? options(request) : options);
+    }).then(function (optionsData) {
+      // Assert that optionsData is in fact an Object.
+      if (!optionsData || typeof optionsData !== 'object') {
+        throw new Error('GraphQL middleware option function must return an options object ' + 'or a promise which will be resolved to an options object.');
+      }
+
+      // Assert that schema is required.
+      if (!optionsData.schema) {
+        throw new Error('GraphQL middleware options must contain a schema.');
+      }
+
+      schema = optionsData.schema;
+      context = optionsData.context;
+      rootValue = optionsData.rootValue;
+      pretty = optionsData.pretty;
+      graphiql = optionsData.graphiql;
+      formatErrorFn = optionsData.formatError;
+      backendServer = optionsData.backendServer;
 
       validationRules = _graphql.specifiedRules;
-      if (optionsObj.validationRules) {
-        validationRules = validationRules.concat(optionsObj.validationRules);
+      if (optionsData.validationRules) {
+        validationRules = validationRules.concat(optionsData.validationRules);
       }
 
       // GraphQL HTTP only supports GET and POST methods.
@@ -83,13 +97,7 @@ function graphqlHTTP(options) {
       }
 
       // Parse the Request body.
-      (0, _parseBody.parseBody)(request, function (parseError, data) {
-        if (parseError) {
-          reject(parseError);
-        } else {
-          resolve(data || {});
-        }
-      });
+      return (0, _parseBody.parseBody)(request);
     }).then(function (data) {
       showGraphiQL = graphiql && canDisplayGraphiQL(request, data);
 
@@ -173,24 +181,6 @@ function graphqlHTTP(options) {
       }
     });
   };
-}
-
-/**
- * Get the options that the middleware was configured with, sanity
- * checking them.
- */
-function getOptions(options, request) {
-  var optionsData = typeof options === 'function' ? options(request) : options;
-
-  if (!optionsData || typeof optionsData !== 'object') {
-    throw new Error('GraphQL middleware option function must return an options object.');
-  }
-
-  if (!optionsData.schema) {
-    throw new Error('GraphQL middleware options must contain a schema.');
-  }
-
-  return optionsData;
 }
 
 /**

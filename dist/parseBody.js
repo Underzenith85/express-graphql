@@ -37,16 +37,16 @@ var _zlib = require('zlib');
 
 var _zlib2 = _interopRequireDefault(_zlib);
 
-function parseBody(req, next) {
-  try {
+function parseBody(req) {
+  return new Promise(function (resolve, reject) {
     // If express has already parsed a body as a keyed object, use it.
     if (typeof req.body === 'object' && !(req.body instanceof Buffer)) {
-      return next(null, req.body);
+      return resolve(req.body);
     }
 
     // Skip requests without content types.
     if (req.headers['content-type'] === undefined) {
-      return next();
+      return resolve({});
     }
 
     var typeInfo = _contentType2['default'].parse(req);
@@ -54,29 +54,27 @@ function parseBody(req, next) {
     // If express has already parsed a body as a string, and the content-type
     // was application/graphql, parse the string body.
     if (typeof req.body === 'string' && typeInfo.type === 'application/graphql') {
-      return next(null, graphqlParser(req.body));
+      return resolve(graphqlParser(req.body));
     }
 
     // Already parsed body we didn't recognise? Parse nothing.
     if (req.body) {
-      return next();
+      return resolve({});
     }
 
     // Use the correct body parser based on Content-Type header.
     switch (typeInfo.type) {
       case 'application/graphql':
-        return read(req, typeInfo, graphqlParser, next);
+        return read(req, typeInfo, graphqlParser, resolve, reject);
       case 'application/json':
-        return read(req, typeInfo, jsonEncodedParser, next);
+        return read(req, typeInfo, jsonEncodedParser, resolve, reject);
       case 'application/x-www-form-urlencoded':
-        return read(req, typeInfo, urlEncodedParser, next);
+        return read(req, typeInfo, urlEncodedParser, resolve, reject);
     }
 
     // If no Content-Type header matches, parse nothing.
-    return next();
-  } catch (error) {
-    return next(error);
-  }
+    return resolve({});
+  });
 }
 
 function jsonEncodedParser(body) {
@@ -112,7 +110,7 @@ function graphqlParser(body) {
 var jsonObjRegex = /^[\x20\x09\x0a\x0d]*\{/;
 
 // Read and parse a request body.
-function read(req, typeInfo, parseFn, next) {
+function read(req, typeInfo, parseFn, resolve, reject) {
   var charset = (typeInfo.parameters.charset || 'utf-8').toLowerCase();
 
   // Assert charset encoding per JSON RFC 7159 sec 8.1
@@ -129,14 +127,14 @@ function read(req, typeInfo, parseFn, next) {
   // Read body from stream.
   (0, _rawBody2['default'])(stream, { encoding: charset, length: length, limit: limit }, function (err, body) {
     if (err) {
-      return next(err.type === 'encoding.unsupported' ? (0, _httpErrors2['default'])(415, 'Unsupported charset "' + charset.toUpperCase() + '".') : (0, _httpErrors2['default'])(400, 'Invalid body: ' + err.message + '.'));
+      return reject(err.type === 'encoding.unsupported' ? (0, _httpErrors2['default'])(415, 'Unsupported charset "' + charset.toUpperCase() + '".') : (0, _httpErrors2['default'])(400, 'Invalid body: ' + err.message + '.'));
     }
 
     try {
       // Decode and parse body.
-      return next(null, parseFn(body));
+      return resolve(parseFn(body));
     } catch (error) {
-      return next(error);
+      return reject(error);
     }
   });
 }
